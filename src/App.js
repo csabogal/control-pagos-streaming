@@ -14,6 +14,15 @@ function App() {
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [nuevoNombreParticipante, setNuevoNombreParticipante] = useState("");
   const [plataformasSeleccionadas, setPlataformasSeleccionadas] = useState({});
+  const [mostrarFormularioPlataforma, setMostrarFormularioPlataforma] =
+    useState(false);
+  const [nuevaPlataforma, setNuevaPlataforma] = useState({
+    nombre: "",
+    costo: "",
+    tipo: "normal",
+    participantes: null,
+  });
+  const [editarPlataformaId, setEditarPlataformaId] = useState(null);
 
   useEffect(() => {
     const fetchParticipantes = async () => {
@@ -167,13 +176,76 @@ function App() {
     }
   };
 
+  const agregarPlataforma = () => {
+    setMostrarFormularioPlataforma(true);
+  };
+
+  const manejarCambioPlataforma = (e) => {
+    const { name, value } = e.target;
+    setNuevaPlataforma((prev) => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const manejarEnvioPlataforma = async (e) => {
+    e.preventDefault();
+    const method = editarPlataformaId ? "PUT" : "POST";
+    const url = editarPlataformaId
+      ? `http://localhost:3001/plataformas/${editarPlataformaId}`
+      : "http://localhost:3001/plataformas";
+
+    const response = await fetch(url, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(nuevaPlataforma),
+    });
+
+    const result = await response.json();
+    if (method === "POST") {
+      setPlataformas([...plataformas, result]);
+    } else {
+      setPlataformas(
+        plataformas.map((plataforma) =>
+          plataforma.id === editarPlataformaId ? result : plataforma
+        )
+      );
+    }
+
+    setMostrarFormularioPlataforma(false);
+    setNuevaPlataforma({
+      nombre: "",
+      costo: "",
+      tipo: "normal",
+      participantes: null,
+    });
+    setEditarPlataformaId(null);
+  };
+
+  const editarPlataforma = (plataforma) => {
+    setNuevaPlataforma(plataforma);
+    setEditarPlataformaId(plataforma.id);
+    setMostrarFormularioPlataforma(true);
+  };
+
+  const eliminarPlataforma = async (id) => {
+    if (window.confirm("¿Está seguro de que desea eliminar esta plataforma?")) {
+      await fetch(`http://localhost:3001/plataformas/${id}`, {
+        method: "DELETE",
+      });
+      setPlataformas(plataformas.filter((plataforma) => plataforma.id !== id));
+    }
+  };
+
   return (
     <div className="App">
       <h1>Control de Pagos de Streaming</h1>
 
       <div className="plataformas">
         {plataformas.map((plataforma) => (
-          <div key={plataforma.nombre} className="plataforma">
+          <div key={plataforma.id} className="plataforma">
             <h2>{plataforma.nombre}</h2>
             <p>Costo total: {formatCurrency(plataforma.costo)}</p>
             {plataforma.tipo === "normal" ? (
@@ -205,9 +277,63 @@ function App() {
                 ))}
               </div>
             )}
+            <button onClick={() => editarPlataforma(plataforma)}>Editar</button>
+            <button onClick={() => eliminarPlataforma(plataforma.id)}>
+              Eliminar
+            </button>
           </div>
         ))}
       </div>
+
+      {!mostrarFormularioPlataforma && (
+        <button onClick={agregarPlataforma}>Agregar Plataforma</button>
+      )}
+      {mostrarFormularioPlataforma && (
+        <form onSubmit={manejarEnvioPlataforma}>
+          <input
+            type="text"
+            name="nombre"
+            value={nuevaPlataforma.nombre}
+            onChange={manejarCambioPlataforma}
+            placeholder="Nombre de la plataforma"
+            required
+          />
+          <input
+            type="number"
+            name="costo"
+            value={nuevaPlataforma.costo}
+            onChange={manejarCambioPlataforma}
+            placeholder="Costo de la plataforma"
+            required
+          />
+          <select
+            name="tipo"
+            value={nuevaPlataforma.tipo}
+            onChange={manejarCambioPlataforma}
+          >
+            <option value="normal">Normal</option>
+            <option value="rotativo">Rotativo</option>
+          </select>
+          {nuevaPlataforma.tipo === "rotativo" && (
+            <input
+              type="number"
+              name="participantes"
+              value={nuevaPlataforma.participantes || ""}
+              onChange={manejarCambioPlataforma}
+              placeholder="Número de participantes"
+            />
+          )}
+          <button type="submit">
+            {editarPlataformaId ? "Actualizar" : "Agregar"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setMostrarFormularioPlataforma(false)}
+          >
+            Cancelar
+          </button>
+        </form>
+      )}
 
       <div className="participantes">
         {participantes.map((participante, index) => (
