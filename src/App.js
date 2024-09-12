@@ -9,24 +9,31 @@ const plataformasIniciales = [
 ];
 
 function App() {
-  const [plataformas] = useState(plataformasIniciales);
+  const [plataformas, setPlataformas] = useState(plataformasIniciales);
   const [participantes, setParticipantes] = useState([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [nuevoNombreParticipante, setNuevoNombreParticipante] = useState("");
   const [plataformasSeleccionadas, setPlataformasSeleccionadas] = useState({});
 
   useEffect(() => {
-    const storedParticipantes = JSON.parse(
-      localStorage.getItem("participantes")
-    );
-    if (storedParticipantes) {
-      setParticipantes(storedParticipantes);
-    }
+    const fetchParticipantes = async () => {
+      const response = await fetch("http://localhost:3001/participantes");
+      const data = await response.json();
+      setParticipantes(data);
+    };
+
+    fetchParticipantes();
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("participantes", JSON.stringify(participantes));
-  }, [participantes]);
+    const fetchPlataformas = async () => {
+      const response = await fetch("http://localhost:3001/plataformas");
+      const data = await response.json();
+      setPlataformas(data);
+    };
+
+    fetchPlataformas();
+  }, []);
 
   const agregarParticipante = () => {
     setMostrarFormulario(true);
@@ -43,31 +50,43 @@ function App() {
     }));
   };
 
-  const manejarEnvio = (e) => {
+  const manejarEnvio = async (e) => {
     e.preventDefault();
     if (nuevoNombreParticipante) {
-      setParticipantes([
-        ...participantes,
-        {
-          nombre: nuevoNombreParticipante,
-          plataformas: plataformasSeleccionadas,
-          pagado: false,
+      const response = await fetch("http://localhost:3001/participantes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      ]);
+        body: JSON.stringify({
+          nombre: nuevoNombreParticipante,
+          plataformas: Object.keys(plataformasSeleccionadas).filter(
+            (key) => plataformasSeleccionadas[key]
+          ),
+        }),
+      });
+
+      const newParticipante = await response.json();
+      setParticipantes([...participantes, newParticipante]);
       setMostrarFormulario(false);
       setNuevoNombreParticipante("");
       setPlataformasSeleccionadas({});
     }
   };
 
-  const marcarPago = (participanteIndex) => {
+  const marcarPago = async (participanteIndex) => {
+    const participante = participantes[participanteIndex];
+    await fetch(`http://localhost:3001/participantes/${participante.id}/pago`, {
+      method: "PUT",
+    });
+
     const nuevosParticipantes = [...participantes];
     nuevosParticipantes[participanteIndex].pagado =
       !nuevosParticipantes[participanteIndex].pagado;
     setParticipantes(nuevosParticipantes);
   };
 
-  const reiniciarPagos = () => {
+  const reiniciarPagos = async () => {
     if (
       window.confirm("¿Está seguro de que desea reiniciar todos los pagos?")
     ) {
