@@ -23,6 +23,7 @@ function App() {
     participantes: null,
   });
   const [editarPlataformaId, setEditarPlataformaId] = useState(null);
+  const [editarParticipanteId, setEditarParticipanteId] = useState(null);
 
   useEffect(() => {
     const fetchParticipantes = async () => {
@@ -62,27 +63,60 @@ function App() {
   const manejarEnvio = async (e) => {
     e.preventDefault();
     if (nuevoNombreParticipante) {
-      const response = await fetch("http://localhost:3001/participantes", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          nombre: nuevoNombreParticipante,
-          plataformas: Object.keys(plataformasSeleccionadas).filter(
-            (key) => plataformasSeleccionadas[key]
-          ),
-        }),
-      });
+      try {
+        const plataformasSeleccionadasArray = Object.keys(
+          plataformasSeleccionadas
+        )
+          .filter((key) => plataformasSeleccionadas[key])
+          .map((key) => {
+            const plataforma = plataformas.find((p) => p.nombre === key);
+            return plataforma ? plataforma.id : null;
+          })
+          .filter((id) => id !== null); // Filtrar valores null
 
-      const newParticipante = await response.json();
-      setParticipantes([...participantes, newParticipante]);
-      setMostrarFormulario(false);
-      setNuevoNombreParticipante("");
-      setPlataformasSeleccionadas({});
+        const method = editarParticipanteId ? "PUT" : "POST";
+        const url = editarParticipanteId
+          ? `http://localhost:3001/participantes/${editarParticipanteId}`
+          : "http://localhost:3001/participantes";
+
+        const response = await fetch(url, {
+          method,
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            nombre: nuevoNombreParticipante,
+            plataformas: plataformasSeleccionadasArray,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const newParticipante = await response.json();
+        if (method === "POST") {
+          setParticipantes([...participantes, newParticipante]);
+        } else {
+          setParticipantes(
+            participantes.map((participante) =>
+              participante.id === editarParticipanteId
+                ? newParticipante
+                : participante
+            )
+          );
+        }
+
+        setMostrarFormulario(false);
+        setNuevoNombreParticipante("");
+        setPlataformasSeleccionadas({});
+        setEditarParticipanteId(null);
+      } catch (error) {
+        console.error("Error adding/updating participant:", error);
+        // You might want to show an error message to the user here
+      }
     }
   };
-
   const marcarPago = async (participanteIndex) => {
     const participante = participantes[participanteIndex];
     await fetch(`http://localhost:3001/participantes/${participante.id}/pago`, {
@@ -152,8 +186,12 @@ function App() {
   };
 
   const calcularTotalPorParticipante = (participante) => {
+    if (!participante.plataformas) {
+      return formatCurrency(0);
+    }
+
     const total = plataformas.reduce((total, plataforma) => {
-      if (participante.plataformas[plataforma.nombre]) {
+      if (participante.plataformas.includes(plataforma.id)) {
         const costoPorParticipante = calcularCostoPorParticipanteRaw(
           plataforma.costo,
           plataforma.nombre,
@@ -170,8 +208,11 @@ function App() {
     const nuevosParticipantes = [...participantes];
     const plataformaSpotify = plataformas.find((p) => p.nombre === "Spotify");
     if (plataformaSpotify) {
-      nuevosParticipantes[index].plataformas["Spotify"] =
-        !nuevosParticipantes[index].plataformas["Spotify"];
+      if (!nuevosParticipantes[index].plataformas) {
+        nuevosParticipantes[index].plataformas = {};
+      }
+      nuevosParticipantes[index].plataformas[plataformaSpotify.nombre] =
+        !nuevosParticipantes[index].plataformas[plataformaSpotify.nombre];
       setParticipantes(nuevosParticipantes);
     }
   };
@@ -239,6 +280,31 @@ function App() {
     }
   };
 
+  const editarParticipante = (participante) => {
+    setNuevoNombreParticipante(participante.nombre);
+    setPlataformasSeleccionadas(
+      participante.plataformas.reduce((acc, plataforma) => {
+        acc[plataforma] = true;
+        return acc;
+      }, {})
+    );
+    setMostrarFormulario(true);
+    setEditarParticipanteId(participante.id);
+  };
+
+  const eliminarParticipante = async (id) => {
+    if (
+      window.confirm("¿Está seguro de que desea eliminar este participante?")
+    ) {
+      await fetch(`http://localhost:3001/participantes/${id}`, {
+        method: "DELETE",
+      });
+      setParticipantes(
+        participantes.filter((participante) => participante.id !== id)
+      );
+    }
+  };
+
   return (
     <div className="App">
       <h1>Control de Pagos de Streaming</h1>
@@ -266,7 +332,10 @@ function App() {
                       type="checkbox"
                       id={`spotify-${participante.nombre}`}
                       checked={
-                        participante.plataformas[plataforma.nombre] || false
+                        participante.plataformas &&
+                        participante.plataformas[plataforma.nombre]
+                          ? participante.plataformas[plataforma.nombre]
+                          : false
                       }
                       onChange={() => toggleSpotifyParticipante(index)}
                     />
@@ -346,6 +415,12 @@ function App() {
               {participante.pagado ? "Pagado" : "Pendiente"}
             </button>
             <p>Total a pagar: {calcularTotalPorParticipante(participante)}</p>
+            <button onClick={() => editarParticipante(participante)}>
+              Editar
+            </button>
+            <button onClick={() => eliminarParticipante(participante.id)}>
+              Eliminar
+            </button>
           </div>
         ))}
       </div>

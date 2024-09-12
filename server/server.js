@@ -71,13 +71,51 @@ app.post("/participantes", async (req, res) => {
   const participanteId = result.insertId;
 
   for (const plataformaId of plataformas) {
-    await db.query(
-      "INSERT INTO participante_plataformas (participante_id, plataforma_id) VALUES (?, ?)",
-      [participanteId, plataformaId]
-    );
+    if (plataformaId !== null) {
+      await db.query(
+        "INSERT INTO participante_plataformas (participante_id, plataforma_id) VALUES (?, ?)",
+        [participanteId, plataformaId]
+      );
+    }
   }
 
   res.status(201).json({ id: participanteId, nombre, plataformas });
+});
+
+app.put("/participantes/:id", async (req, res) => {
+  const { id } = req.params;
+  const { nombre, plataformas } = req.body;
+  await db.query("UPDATE participantes SET nombre = ? WHERE id = ?", [
+    nombre,
+    id,
+  ]);
+  await db.query(
+    "DELETE FROM participante_plataformas WHERE participante_id = ?",
+    [id]
+  );
+  for (const plataformaId of plataformas) {
+    await db.query(
+      "INSERT INTO participante_plataformas (participante_id, plataforma_id) VALUES (?, ?)",
+      [id, plataformaId]
+    );
+  }
+  res.json({ id, nombre, plataformas });
+});
+
+app.delete("/participantes/:id", async (req, res) => {
+  const { id } = req.params;
+  await db.query(
+    "DELETE FROM participante_plataformas WHERE participante_id = ?",
+    [id]
+  );
+  const [result] = await db.query("DELETE FROM participantes WHERE id = ?", [
+    id,
+  ]);
+  if (result.affectedRows > 0) {
+    res.json({ message: "Participante eliminado" });
+  } else {
+    res.status(404).json({ message: "Participante no encontrado" });
+  }
 });
 
 app.put("/participantes/:id/pago", async (req, res) => {
